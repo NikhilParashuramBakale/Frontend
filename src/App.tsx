@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Activity, Server, Users, TreePine } from 'lucide-react';
 import { ServerSection } from './components/ServerSection';
 import { NavigationMenu } from './components/NavigationMenu';
 import { AddServerModal } from './components/AddServerModal';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { useMenu } from './context/MenuContext';
-import { createServer, deleteServer } from './firebase';
+import { createServer, deleteServer, loadAllServers } from './firebase';
 
 interface ServerData {
   id: string;
@@ -22,10 +22,23 @@ interface ClientActiveStatus {
 
 function App() {
   const { isExpanded } = useMenu();
-  const [servers, setServers] = useState<ServerData[]>([
-    { id: '1', name: 'Server 1', location: 'Wilderness Research Station Alpha' },
-    { id: '2', name: 'Server 2', location: 'Forest Monitoring Base Beta' }
-  ]);
+  const [servers, setServers] = useState<ServerData[]>([]);
+  
+  // Load servers from Firebase on component mount
+  useEffect(() => {
+    console.log('Loading servers from Firebase...');
+    const unsubscribe = loadAllServers((firebaseServers) => {
+      const serverArray: ServerData[] = Object.keys(firebaseServers).map((serverKey, index) => ({
+        id: (index + 1).toString(),
+        name: serverKey.replace(/^\w/, c => c.toUpperCase()).replace(/(\d+)/, ' $1'), // Convert "server1" to "Server 1"
+        location: firebaseServers[serverKey].location || `Monitoring Station ${index + 1}` // Use location from Firebase or default
+      }));
+      console.log('Setting servers from Firebase:', serverArray);
+      setServers(serverArray);
+    });
+
+    return unsubscribe; // Cleanup subscription on unmount
+  }, []);
   
   // Active status tracking
   const [activeClients, setActiveClients] = useState<ClientActiveStatus[]>([]);
@@ -76,17 +89,26 @@ function App() {
       location: location
     };
     
-    // Update UI immediately
-    setServers([...servers, newServer]);
+    // Update UI immediately (optional, since Firebase subscription will update it)
+    // setServers([...servers, newServer]);
     
     // Then update Firebase with higher priority
     const serverKey = newServer.name.toLowerCase().replace(' ', '');
     
+    console.log('Creating server in Firebase:', serverKey, 'with location:', location);
+    
     // Use setTimeout with 0 delay to move Firebase operation to the next event loop tick
     // This ensures UI updates finish first and Firebase updates happen immediately after
     setTimeout(() => {
-      createServer(serverKey)
-        .catch(error => console.error('Error creating server:', error));
+      createServer(serverKey, location)
+        .then(() => {
+          console.log('Server created successfully in Firebase:', serverKey);
+        })
+        .catch(error => {
+          console.error('Error creating server in Firebase:', error);
+          // If Firebase fails, we might want to revert the UI change
+          // For now, just log the error
+        });
     }, 0);
   };
 

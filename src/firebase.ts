@@ -1,6 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, set, remove, onValue, off } from "firebase/database";
+import { getAuth, signInAnonymously } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -17,50 +18,124 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
+const auth = getAuth(app);
+
+// Sign in anonymously for database access
+signInAnonymously(auth)
+  .then(() => {
+    console.log('Signed in anonymously to Firebase');
+  })
+  .catch((error) => {
+    console.error('Anonymous sign-in failed:', error);
+  });
 
 // Firebase helper functions
-export const createServer = (serverName: string) => {
-  const serverRef = ref(database, `servers/${serverName}`);
-  return set(serverRef, {
-    mode: "idle",
-    client_id: "",
-    data: {
-      folder_no: "",
-      connected: false,
-      sensor_file: false,
-      audio_file: false,
-      image_file: false,
-      transmission_completed: false
-    },
-    record: {
-      client1: {
-        status: "idle",
-        request: false,
-        time_range: "",
-        date: ""
+// Firebase helper functions
+export const createServer = async (serverName: string, location?: string) => {
+  try {
+    console.log('Attempting to create server:', serverName, 'with location:', location);
+    const serverRef = ref(database, `servers/${serverName}`);
+    await set(serverRef, {
+      mode: "idle",
+      client_id: "",
+      location: location || "Monitoring Station", // Store location in Firebase
+      data: {
+        folder_no: "",
+        connected: false,
+        sensor_file: false,
+        audio_file: false,
+        image_file: false,
+        transmission_completed: false
+      },
+      record: {
+        client1: {
+          status: "idle",
+          request: false,
+          time_range: "",
+          date: ""
+        }
       }
+    });
+    console.log('Server created successfully:', serverName);
+  } catch (error) {
+    console.error('Failed to create server:', serverName, error);
+    throw error;
+  }
+};
+
+export const deleteServer = async (serverName: string) => {
+  try {
+    console.log('Attempting to delete server:', serverName);
+    const serverRef = ref(database, `servers/${serverName}`);
+    await remove(serverRef);
+    console.log('Server deleted successfully:', serverName);
+  } catch (error) {
+    console.error('Failed to delete server:', serverName, error);
+    throw error;
+  }
+};
+
+export const createClient = async (serverName: string, clientName: string) => {
+  try {
+    console.log('Attempting to create client:', serverName, clientName);
+    const clientRef = ref(database, `servers/${serverName}/record/${clientName}`);
+    await set(clientRef, {
+      status: "idle",
+      request: false,
+      time_range: "",
+      date: ""
+    });
+    console.log('Client created successfully:', serverName, clientName);
+  } catch (error) {
+    console.error('Failed to create client:', serverName, clientName, error);
+    throw error;
+  }
+};
+
+export const deleteClient = async (serverName: string, clientName: string) => {
+  try {
+    console.log('Attempting to delete client:', serverName, clientName);
+    const clientRef = ref(database, `servers/${serverName}/record/${clientName}`);
+    await remove(clientRef);
+    console.log('Client deleted successfully:', serverName, clientName);
+  } catch (error) {
+    console.error('Failed to delete client:', serverName, clientName, error);
+    throw error;
+  }
+};
+
+export const loadAllServers = (callback: (servers: any) => void) => {
+  const serversRef = ref(database, 'servers');
+  onValue(serversRef, (snapshot) => {
+    const data = snapshot.val();
+    console.log('Loaded servers from Firebase:', data);
+    
+    // Transform Firebase data to include clients
+    const serversWithClients: any = {};
+    if (data) {
+      Object.keys(data).forEach(serverKey => {
+        const serverData = data[serverKey];
+        serversWithClients[serverKey] = {
+          ...serverData,
+          clients: serverData.record ? Object.keys(serverData.record) : ['client1']
+        };
+      });
     }
+    
+    callback(serversWithClients);
   });
+  return () => off(serversRef);
 };
 
-export const deleteServer = (serverName: string) => {
-  const serverRef = ref(database, `servers/${serverName}`);
-  return remove(serverRef);
-};
-
-export const createClient = (serverName: string, clientName: string) => {
-  const clientRef = ref(database, `servers/${serverName}/record/${clientName}`);
-  return set(clientRef, {
-    status: "idle",
-    request: false,
-    time_range: "",
-    date: ""
+export const loadServerClients = (serverName: string, callback: (clients: string[]) => void) => {
+  const serverRef = ref(database, `servers/${serverName}/record`);
+  onValue(serverRef, (snapshot) => {
+    const data = snapshot.val();
+    console.log(`Loaded clients for server ${serverName}:`, data);
+    const clientNames = data ? Object.keys(data) : ['client1'];
+    callback(clientNames);
   });
-};
-
-export const deleteClient = (serverName: string, clientName: string) => {
-  const clientRef = ref(database, `servers/${serverName}/record/${clientName}`);
-  return remove(clientRef);
+  return () => off(serverRef);
 };
 
 export const setServerMode = (serverName: string, mode: "record" | "data" | "idle") => {

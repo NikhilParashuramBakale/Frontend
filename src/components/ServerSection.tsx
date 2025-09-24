@@ -4,7 +4,7 @@ import { ClientCard } from './ClientCard';
 import { LocationEditModal } from './LocationEditModal';
 import { AddClientModal } from './AddClientModal';
 import { ConfirmationModal } from './ConfirmationModal';
-import { createClient, deleteClient } from '../firebase';
+import { createClient, deleteClient, subscribeToServerData, loadServerClients } from '../firebase';
 
 interface Client {
   id: string;
@@ -55,10 +55,26 @@ export const ServerSection: React.FC<ServerSectionProps> = ({
   // Server-wide record processing state (Phase 1 - before status becomes "done")
   const [isRecordProcessing, setIsRecordProcessing] = useState<boolean>(false);
   
-  // Initialize with Client 1 as default
-  const [clients, setClients] = useState<Client[]>([
-    { id: '1', name: 'Client 1', location: 'Field Station A', isActive: true }
-  ]);
+  // Initialize with empty array, will be loaded from Firebase
+  const [clients, setClients] = useState<Client[]>([]);
+
+  // Load clients from Firebase on component mount
+  useEffect(() => {
+    console.log(`Loading clients for server: ${serverName}`);
+    const serverKey = serverName.toLowerCase().replace(' ', '');
+    const unsubscribe = loadServerClients(serverKey, (clientNames) => {
+      const clientObjects: Client[] = clientNames.map((clientName, index) => ({
+        id: (index + 1).toString(),
+        name: clientName.replace(/^\w/, c => c.toUpperCase()).replace(/(\d+)/, ' $1'), // Convert "client1" to "Client 1"
+        location: `Station ${index + 1}`, // Default location, could be enhanced
+        isActive: false
+      }));
+      console.log('Setting clients from Firebase:', clientObjects);
+      setClients(clientObjects);
+    });
+
+    return unsubscribe;
+  }, [serverName]);
 
   const addClient = (clientNumber: number, location: string) => {
     const newClient: Client = {

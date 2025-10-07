@@ -43,7 +43,7 @@ const BatDetailsPage: React.FC = () => {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('useEffect triggered with location.pathname:', location.pathname);
+    console.log('BatDetailsPage useEffect running on mount');
     const loadBatFiles = async () => {
       console.log('BatDetailsPage: Starting loadBatFiles');
       console.log('batId:', batId);
@@ -162,7 +162,7 @@ const BatDetailsPage: React.FC = () => {
     };
 
     loadBatFiles();
-  }, [location.pathname]);
+  }, []); // Empty dependency array - runs only on mount
 
   console.log('BatDetailsPage - Rendering with:', {
     batId,

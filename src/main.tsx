@@ -1,16 +1,17 @@
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import App from './App.tsx';
 import BatDetailsPage from './components/BatDetailsPage_clean.tsx';
 import { DataHistoryFullPage } from './components/DataHistoryFullPage';
 import { MenuProvider } from './context/MenuContext';
 import './index.css';
 
-// Wrapper component to force re-mounting on batId change
+// Wrapper component to force re-mounting on route change
 const BatDetailsPageWrapper: React.FC = () => {
-  return <BatDetailsPage />;
+  const { pathname } = useLocation();
+  return <BatDetailsPage key={pathname} />;
 };
 
 createRoot(document.getElementById('root')!).render(

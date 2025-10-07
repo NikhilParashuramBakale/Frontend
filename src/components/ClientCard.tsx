@@ -165,16 +165,22 @@ export const ClientCard: React.FC<ClientCardProps> = ({
     });
   };
 
-  const handleBatIdClick = (batId: string) => {
+    const handleBatIdClick = (batId: string) => {
     // Extract server and client numbers from serverName and clientName
     const serverNum = serverName.replace('Server ', '');
     const clientNum = clientName.replace('Client ', '');
     
-    const url = `/bat/${serverNum}/${clientNum}/${batId}?t=${Date.now()}`;
-    console.log('BAT ID clicked, navigating to:', url);
+    console.log('BAT ID clicked:', {
+      batId,
+      serverName,
+      clientName,
+      serverNum,
+      clientNum,
+      navigatingTo: `/bat/${serverNum}/${clientNum}/${batId}`
+    });
     
-    // Navigate with page refresh and cache busting to ensure data loads
-    window.location.href = url;
+    // Navigate using React Router - component will re-mount due to key prop
+    navigate(`/bat/${serverNum}/${clientNum}/${batId}`);
   };
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLocationEditOpen, setIsLocationEditOpen] = useState(false);

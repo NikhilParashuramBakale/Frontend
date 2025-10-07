@@ -170,15 +170,11 @@ export const ClientCard: React.FC<ClientCardProps> = ({
     const serverNum = serverName.replace('Server ', '');
     const clientNum = clientName.replace('Client ', '');
     
-    navigate(`/bat/${batId}`, {
-      state: {
-        serverName,
-        clientName,
-        serverNum,
-        clientNum,
-        batId
-      }
-    });
+    const url = `/bat/${serverNum}/${clientNum}/${batId}?t=${Date.now()}`;
+    console.log('BAT ID clicked, navigating to:', url);
+    
+    // Navigate with page refresh and cache busting to ensure data loads
+    window.location.href = url;
   };
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLocationEditOpen, setIsLocationEditOpen] = useState(false);

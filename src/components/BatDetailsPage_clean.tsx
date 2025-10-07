@@ -13,12 +13,14 @@ interface EnvironmentalData {
 }
 
 const BatDetailsPage: React.FC = () => {
-  const { batId } = useParams<{ batId: string }>();
+  const { batId, serverNum, clientNum } = useParams<{ batId: string; serverNum: string; clientNum: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { isExpanded } = useMenu();
 
-  // Get navigation state (server and client info)
+  console.log('BatDetailsPage mounted with params:', { batId, serverNum, clientNum, pathname: location.pathname });
+
+  // Get navigation state (server and client info) - fallback if not in params
   const navigationState = location.state as {
     serverName?: string;
     clientName?: string;
@@ -41,14 +43,25 @@ const BatDetailsPage: React.FC = () => {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('useEffect triggered with location.pathname:', location.pathname);
     const loadBatFiles = async () => {
       console.log('BatDetailsPage: Starting loadBatFiles');
       console.log('batId:', batId);
-      console.log('navigationState:', navigationState);
+      console.log('serverNum:', serverNum);
+      console.log('clientNum:', clientNum);
+      console.log('Current location:', location.pathname);
       
-      // Fallback values if navigationState is missing
-      const serverNum = navigationState?.serverNum || '1';
-      const clientNum = navigationState?.clientNum || '1';
+      // Reset all states when loading new data
+      setLoading(true);
+      setSensorData(null);
+      setSensorError(null);
+      setSpectrogramUrl(null);
+      setCameraUrl(null);
+      setAudioUrl(null);
+      
+      // Use params first, then fallback to navigationState
+      const effectiveServerNum = serverNum || navigationState?.serverNum || '1';
+      const effectiveClientNum = clientNum || navigationState?.clientNum || '1';
       
       if (!batId) {
         console.log('Missing batId');
@@ -60,17 +73,24 @@ const BatDetailsPage: React.FC = () => {
         setLoading(true);
         console.log('Calling fetchBatFiles with:', {
           batId,
-          serverNum,
-          clientNum
+          serverNum: effectiveServerNum,
+          clientNum: effectiveClientNum
         });
         
         const files = await fetchBatFiles(
           batId,
-          serverNum,
-          clientNum
+          effectiveServerNum,
+          effectiveClientNum
         );
         
         console.log('fetchBatFiles response:', files);
+        
+        if (!files.success) {
+          console.error('fetchBatFiles failed:', files.message);
+          setSensorError('Failed to load BAT files: ' + (files.message || 'Unknown error'));
+          setLoading(false);
+          return;
+        }
         
         // Set file URLs if files exist
         if (files.files?.spectrogram) {
@@ -142,7 +162,7 @@ const BatDetailsPage: React.FC = () => {
     };
 
     loadBatFiles();
-  }, [batId, navigationState]);
+  }, [location.pathname]);
 
   console.log('BatDetailsPage - Rendering with:', {
     batId,

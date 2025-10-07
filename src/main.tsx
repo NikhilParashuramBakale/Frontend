@@ -8,13 +8,18 @@ import { DataHistoryFullPage } from './components/DataHistoryFullPage';
 import { MenuProvider } from './context/MenuContext';
 import './index.css';
 
+// Wrapper component to force re-mounting on batId change
+const BatDetailsPageWrapper: React.FC = () => {
+  return <BatDetailsPage />;
+};
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MenuProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<App />} />
-          <Route path="/bat/:batId" element={<BatDetailsPage />} />
+          <Route path="/bat/:serverNum/:clientNum/:batId" element={<BatDetailsPageWrapper />} />
           <Route path="/data-history-full" element={<DataHistoryFullPage />} />
         </Routes>
       </BrowserRouter>

@@ -13,6 +13,7 @@ interface EnvironmentalData {
 }
 
 const BatDetailsPage: React.FC = () => {
+  console.log('🚀 BatDetailsPage COMPONENT MOUNTED/RENDERED');
   const { batId, serverNum, clientNum } = useParams<{ batId: string; serverNum: string; clientNum: string }>();
   const navigate = useNavigate();
   const location = useLocation();

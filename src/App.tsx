@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Activity, Server, Users, TreePine } from 'lucide-react';
 import { ServerSection } from './components/ServerSection';
-import { NavigationMenu } from './components/NavigationMenu';
 import { AddServerModal } from './components/AddServerModal';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { useMenu } from './context/MenuContext';
@@ -144,8 +143,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50/80 to-blue-50/30 relative">
-      <NavigationMenu />
-      
   {/* Header */}
   <div className={`relative bg-gradient-to-r from-emerald-800 via-teal-700 to-emerald-800 shadow-lg overflow-hidden transition-all duration-300 ${isExpanded ? 'ml-64' : 'ml-16'}`}>
         {/* Background Video */}

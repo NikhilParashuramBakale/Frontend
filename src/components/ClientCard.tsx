@@ -170,17 +170,21 @@ export const ClientCard: React.FC<ClientCardProps> = ({
     const serverNum = serverName.replace('Server ', '');
     const clientNum = clientName.replace('Client ', '');
     
-    console.log('BAT ID clicked:', {
+    const targetPath = `/bat/${serverNum}/${clientNum}/${batId}`;
+    console.log('🔵 BAT ID clicked:', {
       batId,
       serverName,
       clientName,
       serverNum,
       clientNum,
-      navigatingTo: `/bat/${serverNum}/${clientNum}/${batId}`
+      targetPath,
+      currentLocation: window.location.href
     });
     
-    // Navigate using React Router - component will re-mount due to key prop
-    navigate(`/bat/${serverNum}/${clientNum}/${batId}`);
+    // Navigate using React Router
+    navigate(targetPath);
+    
+    console.log('🔵 navigate() called, new location should be:', targetPath);
   };
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLocationEditOpen, setIsLocationEditOpen] = useState(false);
@@ -264,7 +268,9 @@ export const ClientCard: React.FC<ClientCardProps> = ({
     });
 
     return unsubscribeMode;
-  }, [serverName, clientName, serverId, onActiveStatusChange, onServerProcessingChange, showStatusSection]);
+  }, [serverName, clientName, serverId]);
+  // Note: onActiveStatusChange and onServerProcessingChange are excluded from dependencies
+  // to prevent infinite loops. They are stable callback functions.
 
   // Also listen for active client changes to immediately update UI when client_id is reset
   useEffect(() => {

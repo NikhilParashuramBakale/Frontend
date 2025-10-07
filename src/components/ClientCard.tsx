@@ -213,17 +213,22 @@ export const ClientCard: React.FC<ClientCardProps> = ({
     const serverKey = serverName.toLowerCase().replace(' ', '');
     const clientKey = clientName.toLowerCase().replace(' ', '');
     
-    // Check both server mode and which client is active
+    // Listen for server mode changes in real-time
     const unsubscribeMode = getServerMode(serverKey, (mode) => {
+      console.log(`${clientName} - Server mode changed to: ${mode}`);
+      
       if (mode === 'data') {
         // Server is in data mode, now check if THIS client is the active one
         getActiveDataClient(serverKey, (activeClientId) => {
           if (activeClientId === clientKey) {
-            console.log(`${clientName} - This client is the active data client after refresh, restoring full state`);
+            console.log(`${clientName} - This client is the active data client, showing processing state`);
             setIsDataModeActive(true);
-            setShowStatusSection(true); // Show the popup like first time
-            setProgressPercentage(0); // Start at 0%
-            setDataUICompleted(false); // Reset completion flag
+            // Don't auto-show popup on mode change, only on initial load
+            if (!showStatusSection) {
+              setShowStatusSection(true); // Show the popup like first time
+              setProgressPercentage(0); // Start at 0%
+              setDataUICompleted(false); // Reset completion flag
+            }
             
             // Also notify parent that this client is active
             onActiveStatusChange(serverId, clientName, true, 'data');
@@ -239,14 +244,54 @@ export const ClientCard: React.FC<ClientCardProps> = ({
           }
         });
       } else {
-        console.log(`${clientName} - Server is not in data mode (${mode})`);
+        // Server mode is idle or something else - deactivate this client
+        console.log(`${clientName} - Server is not in data mode (${mode}) - deactivating`);
         setIsDataModeActive(false);
         setShowStatusSection(false);
+        setDataUICompleted(false);
+        setProgressPercentage(0);
+        
+        // Notify parent that this client is no longer active
+        onActiveStatusChange(serverId, clientName, false);
+        
+        // Mark server as not processing
+        if (onServerProcessingChange) {
+          onServerProcessingChange(false);
+        }
       }
     });
 
     return unsubscribeMode;
-  }, [serverName, clientName, serverId, onActiveStatusChange, onServerProcessingChange]);
+  }, [serverName, clientName, serverId, onActiveStatusChange, onServerProcessingChange, showStatusSection]);
+
+  // Also listen for active client changes to immediately update UI when client_id is reset
+  useEffect(() => {
+    const serverKey = serverName.toLowerCase().replace(' ', '');
+    const clientKey = clientName.toLowerCase().replace(' ', '');
+    
+    const unsubscribeClient = getActiveDataClient(serverKey, (activeClientId) => {
+      // Only update if we're currently in data mode and this affects us
+      if (isDataModeActive) {
+        if (!activeClientId || activeClientId !== clientKey) {
+          console.log(`${clientName} - No longer the active data client (active: ${activeClientId}) - deactivating`);
+          setIsDataModeActive(false);
+          setShowStatusSection(false);
+          setDataUICompleted(false);
+          setProgressPercentage(0);
+          
+          // Notify parent that this client is no longer active
+          onActiveStatusChange(serverId, clientName, false);
+          
+          // Mark server as not processing
+          if (onServerProcessingChange) {
+            onServerProcessingChange(false);
+          }
+        }
+      }
+    });
+
+    return unsubscribeClient;
+  }, [serverName, clientName, serverId, isDataModeActive, onActiveStatusChange, onServerProcessingChange]);
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
@@ -280,18 +325,24 @@ export const ClientCard: React.FC<ClientCardProps> = ({
             // Set completion flag to prevent further UI updates
             setDataUICompleted(true);
             
-            // Notify active status change - client becomes inactive
-            onActiveStatusChange(serverId, clientName, false);
+            console.log(`${serverName} data transmission completed - auto-resetting to idle after delay`);
             
-            // Notify parent that processing has stopped
-            if (onServerProcessingChange) {
-              onServerProcessingChange(false);
-            }
-            
-            console.log(`${serverName} data transmission completed - keeping data mode active`);
-            
-            // Keep the status window open - user must manually close it
-            // Don't automatically reset Firebase mode - let user decide when to stop data mode
+            // Auto-reset Firebase to idle after a short delay to let user see completion
+            const serverKey = serverName.toLowerCase().replace(' ', '');
+            setTimeout(() => {
+              resetDataSection(serverKey)
+                .then(() => {
+                  console.log(`Auto-reset Firebase data keys for ${serverName} after transmission completed`);
+                })
+                .catch(error => console.error('Error auto-resetting data section:', error));
+              
+              // Reset server mode to idle - this will trigger our mode listener to update UI
+              setServerMode(serverKey, 'idle')
+                .then(() => {
+                  console.log(`Auto-reset server mode to idle for ${serverName} after transmission completed`);
+                })
+                .catch(error => console.error('Error auto-resetting server mode:', error));
+            }, 3000); // 3 second delay to show completion state
           }
         }
       });

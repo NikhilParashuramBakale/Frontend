@@ -4,7 +4,7 @@ import { Settings, Play, MapPin, Edit3, X, Database, ChevronLeft, ChevronRight, 
 import { StatusIndicator } from './StatusIndicator';
 import { SettingsModal } from './SettingsModal';
 import { LocationEditModal } from './LocationEditModal';
-import { subscribeToServerData, setServerMode, updateDataSection, updateRecordSection, subscribeToRecordData, resetRecordSection, resetDataSection } from '../firebase';
+import { subscribeToServerData, setServerMode, updateDataSection, updateRecordSection, subscribeToRecordData, resetRecordSection, resetDataSection, getServerMode, getActiveDataClient } from '../firebase';
 import { fetchAllBatFolders } from '../services/api';
 
 type DataHistoryRow = {
@@ -187,6 +187,7 @@ export const ClientCard: React.FC<ClientCardProps> = ({
     return { timing: '9:00 AM - 5:00 PM', date: isoToday };
   });
   const [showStatusSection, setShowStatusSection] = useState(false);
+  const [isDataModeActive, setIsDataModeActive] = useState(false);
   const [showRecordingSection, setShowRecordingSection] = useState(false);
   const [recordData, setRecordData] = useState({
     status: 'idle',
@@ -206,6 +207,46 @@ export const ClientCard: React.FC<ClientCardProps> = ({
   });
   const [dataUICompleted, setDataUICompleted] = useState(false); // Simple flag like recordUIStatus
   const [progressPercentage, setProgressPercentage] = useState(0);
+
+  // Check server mode AND active client on component mount to restore data mode state after refresh
+  useEffect(() => {
+    const serverKey = serverName.toLowerCase().replace(' ', '');
+    const clientKey = clientName.toLowerCase().replace(' ', '');
+    
+    // Check both server mode and which client is active
+    const unsubscribeMode = getServerMode(serverKey, (mode) => {
+      if (mode === 'data') {
+        // Server is in data mode, now check if THIS client is the active one
+        getActiveDataClient(serverKey, (activeClientId) => {
+          if (activeClientId === clientKey) {
+            console.log(`${clientName} - This client is the active data client after refresh, restoring full state`);
+            setIsDataModeActive(true);
+            setShowStatusSection(true); // Show the popup like first time
+            setProgressPercentage(0); // Start at 0%
+            setDataUICompleted(false); // Reset completion flag
+            
+            // Also notify parent that this client is active
+            onActiveStatusChange(serverId, clientName, true, 'data');
+            
+            // Mark server as processing
+            if (onServerProcessingChange) {
+              onServerProcessingChange(true);
+            }
+          } else {
+            console.log(`${clientName} - Server is in data mode but this client is not active (active: ${activeClientId})`);
+            setIsDataModeActive(false);
+            setShowStatusSection(false);
+          }
+        });
+      } else {
+        console.log(`${clientName} - Server is not in data mode (${mode})`);
+        setIsDataModeActive(false);
+        setShowStatusSection(false);
+      }
+    });
+
+    return unsubscribeMode;
+  }, [serverName, clientName, serverId, onActiveStatusChange, onServerProcessingChange]);
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
@@ -234,7 +275,7 @@ export const ClientCard: React.FC<ClientCardProps> = ({
             setProgressPercentage(percentage);
           }
           
-          // If transmission is completed, mark as completed and reset Firebase
+          // If transmission is completed, mark as completed
           if (data.transmission_completed && !dataUICompleted) {
             // Set completion flag to prevent further UI updates
             setDataUICompleted(true);
@@ -247,19 +288,10 @@ export const ClientCard: React.FC<ClientCardProps> = ({
               onServerProcessingChange(false);
             }
             
-            // Reset Firebase data section but keep UI showing completed state
-            const serverKey = serverName.toLowerCase().replace(' ', '');
-            resetDataSection(serverKey)
-              .then(() => {
-                console.log(`Reset Firebase data keys for ${serverName} after transmission completed`);
-              })
-              .catch(error => console.error('Error resetting data section:', error));
+            console.log(`${serverName} data transmission completed - keeping data mode active`);
             
-            // Reset server mode to idle
-            setServerMode(serverKey, 'idle')
-              .catch(error => console.error('Error resetting server mode:', error));
-              
             // Keep the status window open - user must manually close it
+            // Don't automatically reset Firebase mode - let user decide when to stop data mode
           }
         }
       });
@@ -456,6 +488,12 @@ export const ClientCard: React.FC<ClientCardProps> = ({
   };
 
   const handleDataAccess = () => {
+    // If data mode is already active, don't allow new triggers
+    if (isDataModeActive) {
+      console.log(`${clientName} Data mode already active - cannot start new session`);
+      return;
+    }
+    
     console.log(`${clientName} Data button clicked - starting processing`);
     
     // Notify active status change - client becomes active
@@ -472,6 +510,7 @@ export const ClientCard: React.FC<ClientCardProps> = ({
     
     // Show live status section immediately for instant feedback
     setShowStatusSection(true);
+    setIsDataModeActive(true);
     setProgressPercentage(0);
     
     // Reset completion flag for new session
@@ -498,6 +537,26 @@ export const ClientCard: React.FC<ClientCardProps> = ({
   };
   
   const handleCloseStatusSection = () => {
+    // Just close the UI popup without changing Firebase mode
+    // The server should stay in "data" mode until explicitly changed
+    
+    console.log(`${clientName} hide button clicked - closing popup`);
+    setShowStatusSection(false);
+    // Keep isDataModeActive true - data mode is still running
+    
+    // Reset UI state when manually closing the popup
+    setDataUICompleted(false);
+    setProgressPercentage(0);
+    
+    // Don't reset Firebase data or change server mode when just closing the popup
+    // The data session should continue running in the background
+    
+    console.log(`${clientName} data popup closed - keeping data mode active in Firebase`);
+  };
+
+  const handleStopDataMode = () => {
+    // This actually stops the data mode and resets Firebase
+    
     // Notify active status change - client becomes inactive
     onActiveStatusChange(serverId, clientName, false);
     
@@ -507,8 +566,9 @@ export const ClientCard: React.FC<ClientCardProps> = ({
     }
     
     setShowStatusSection(false);
+    setIsDataModeActive(false);
     
-    // Reset completion flag and UI state when manually closing
+    // Reset completion flag and UI state when stopping data mode
     setDataUICompleted(false);
     setFirebaseData({
       folder_no: '',
@@ -520,7 +580,7 @@ export const ClientCard: React.FC<ClientCardProps> = ({
     });
     setProgressPercentage(0);
     
-    // Reset Firebase data and server mode when closing
+    // Reset Firebase data and server mode when actually stopping
     const serverKey = serverName.toLowerCase().replace(' ', '');
     
     // Reset Firebase data section
@@ -530,6 +590,8 @@ export const ClientCard: React.FC<ClientCardProps> = ({
     // Reset server mode to idle
     setServerMode(serverKey, 'idle')
       .catch(error => console.error('Error resetting server mode:', error));
+      
+    console.log(`${clientName} data mode stopped - Firebase reset to idle`);
   };
 
   const handleSettingsSave = (settings: { timing: string; date: string }) => {
@@ -625,19 +687,25 @@ export const ClientCard: React.FC<ClientCardProps> = ({
               
               <button
                 onClick={handleDataAccess}
-                disabled={isServerProcessing || isRecordProcessing}
+                disabled={isServerProcessing || isRecordProcessing || isDataModeActive}
                 className={`px-3 py-1.5 rounded-lg text-white font-medium transition-all duration-300 transform flex items-center gap-1.5 text-sm ${
                   (isServerProcessing || isRecordProcessing)
                     ? 'bg-emerald-300 cursor-not-allowed' 
-                    : showStatusSection
-                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400/30 scale-105'
+                    : isDataModeActive
+                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400/30 cursor-not-allowed animate-pulse'
                       : 'bg-emerald-600 hover:bg-emerald-700 hover:shadow-lg hover:scale-105 hover:shadow-emerald-500/30'
                 }`}
-                title="Access Firebase Data"
+                title={isDataModeActive ? "Data mode is running - processing..." : "Start data mode"}
               >
-                <Database className={`w-4 h-4 transition-transform duration-300 ${showStatusSection ? 'animate-pulse' : ''}`} />
+                <Database className={`w-4 h-4 transition-transform duration-300 ${isDataModeActive ? 'animate-pulse' : ''}`} />
                 Data
               </button>
+              {isDataModeActive && (
+                <div className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                  Processing...
+                </div>
+              )}
             </div>
           </div>
           
@@ -801,13 +869,22 @@ export const ClientCard: React.FC<ClientCardProps> = ({
                   {dataUICompleted || progressPercentage === 100 ? 'Completed' : `${progressPercentage}%`}
                 </div>
               </div>
-              <button
-                onClick={handleCloseStatusSection}
-                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200 hover:scale-105"
-                title="Close status"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleStopDataMode}
+                  className="px-2 py-1 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                  title="Stop data mode"
+                >
+                  Stop
+                </button>
+                <button
+                  onClick={handleCloseStatusSection}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200 hover:scale-105"
+                  title="Hide popup (keeps data mode running)"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {firebaseData.folder_no && (

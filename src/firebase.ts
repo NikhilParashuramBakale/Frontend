@@ -138,6 +138,24 @@ export const loadServerClients = (serverName: string, callback: (clients: string
   return () => off(serverRef);
 };
 
+export const getServerMode = (serverName: string, callback: (mode: string) => void) => {
+  const modeRef = ref(database, `servers/${serverName}/mode`);
+  onValue(modeRef, (snapshot) => {
+    const mode = snapshot.val() || 'idle';
+    callback(mode);
+  });
+  return () => off(modeRef);
+};
+
+export const getActiveDataClient = (serverName: string, callback: (clientId: string | null) => void) => {
+  const clientRef = ref(database, `servers/${serverName}/client_id`);
+  onValue(clientRef, (snapshot) => {
+    const clientId = snapshot.val() || null;
+    callback(clientId);
+  });
+  return () => off(clientRef);
+};
+
 export const setServerMode = (serverName: string, mode: "record" | "data" | "idle") => {
   const modeRef = ref(database, `servers/${serverName}/mode`);
   return set(modeRef, mode);

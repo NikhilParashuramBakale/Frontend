@@ -341,14 +341,14 @@ const BatDetailsPage: React.FC = () => {
           </div>
 
           {/* Species Photo Card */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 min-h-64 hover:shadow-lg hover:border-emerald-300 transition-all duration-300 hover:scale-[1.02]">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 min-h-96 hover:shadow-lg hover:border-emerald-300 transition-all duration-300 hover:scale-[1.02]">
             <h3 className="text-base font-semibold mb-3 text-emerald-600">Species Photo</h3>
-            <div className="h-48 bg-gray-100 rounded-lg flex flex-col items-center justify-center overflow-hidden">
+            <div className="h-80 bg-gray-100 rounded-lg flex flex-col items-center justify-center overflow-hidden">
               {speciesImageUrl ? (
                 <img 
                   src={speciesImageUrl} 
                   alt={predictedSpecies || 'Species'} 
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-contain rounded-lg"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none';
                     const fallback = (e.target as HTMLImageElement).nextElementSibling;

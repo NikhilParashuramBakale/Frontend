@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, Play, Volume2, AlertCircle } from 'lucide-react';
 import { NavigationMenu } from './NavigationMenu';
 import { useMenu } from '../context/MenuContext';
-import { fetchBatFiles, getFileUrl } from '../services/api';
+import { fetchBatFiles, getFileUrl, predictSpecies, getSpeciesImageUrl } from '../services/api';
 
 interface EnvironmentalData {
   temperature: number;
@@ -37,6 +37,13 @@ const BatDetailsPage: React.FC = () => {
   const [sensorData, setSensorData] = useState<EnvironmentalData | null>(null);
   const [sensorLoading, setSensorLoading] = useState(false);
   const [sensorError, setSensorError] = useState<string | null>(null);
+
+  // Species prediction states
+  const [predictedSpecies, setPredictedSpecies] = useState<string | null>(null);
+  const [speciesConfidence, setSpeciesConfidence] = useState<number>(0);
+  const [speciesImageUrl, setSpeciesImageUrl] = useState<string | null>(null);
+  const [speciesPredicting, setSpeciesPredicting] = useState(false);
+  const [speciesPredictionError, setSpeciesPredictionError] = useState<string | null>(null);
 
   // Image and Audio URLs
   const [spectrogramUrl, setSpectrogramUrl] = useState<string | null>(null);
@@ -165,6 +172,46 @@ const BatDetailsPage: React.FC = () => {
     loadBatFiles();
   }, []); // Empty dependency array - runs only on mount
 
+  // Predict species from spectrogram after component mounts
+  useEffect(() => {
+    if (!batId || !serverNum || !clientNum || loading) return;
+    
+    const performPrediction = async () => {
+      setSpeciesPredicting(true);
+      setSpeciesPredictionError(null);
+      
+      try {
+        console.log('🤖 Starting species prediction for BAT', batId);
+        const result = await predictSpecies(batId, serverNum, clientNum);
+        
+        if (result.success && result.species) {
+          console.log('✅ Prediction successful:', result.species, `(${result.confidence}%)`);
+          setPredictedSpecies(result.species);
+          setSpeciesConfidence(result.confidence || 0);
+          
+          // Set species image URL
+          const imageUrl = getSpeciesImageUrl(result.species);
+          setSpeciesImageUrl(imageUrl);
+          console.log('📸 Species image URL set:', imageUrl);
+        } else {
+          console.warn('⚠️ Prediction failed:', result.message);
+          setSpeciesPredictionError(result.message || 'Failed to predict species');
+          setPredictedSpecies('Unknown species');
+          setSpeciesImageUrl(getSpeciesImageUrl('Unknown_species'));
+        }
+      } catch (err) {
+        console.error('❌ Error during prediction:', err);
+        setSpeciesPredictionError(err instanceof Error ? err.message : 'Prediction error occurred');
+        setPredictedSpecies('Unknown species');
+        setSpeciesImageUrl(getSpeciesImageUrl('Unknown_species'));
+      } finally {
+        setSpeciesPredicting(false);
+      }
+    };
+    
+    performPrediction();
+  }, [batId, serverNum, clientNum, loading]);
+
   console.log('BatDetailsPage - Rendering with:', {
     batId,
     loading,
@@ -172,13 +219,15 @@ const BatDetailsPage: React.FC = () => {
     isExpanded,
     sensorData,
     spectrogramUrl,
-    cameraUrl
+    cameraUrl,
+    predictedSpecies,
+    speciesImageUrl
   });
 
   // Sample bat data
   const batData = {
     id: batId ? `BAT${batId}` : 'BAT001',
-    species: 'Pipistrellus pipistrellus',
+    species: predictedSpecies || 'Pipistrellus pipistrellus',
     location: 'Kolar',
     date: '15/08/2024',
   };
@@ -241,15 +290,36 @@ const BatDetailsPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
           {/* Basic Information Card */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 min-h-64 hover:shadow-lg hover:border-emerald-300 transition-all duration-300 hover:scale-[1.02]">
-            <h3 className="text-base font-semibold mb-3 text-emerald-600">Basic Information</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-emerald-600">Basic Information</h3>
+              {speciesPredicting && (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
+                  <span className="text-xs text-emerald-600">Predicting...</span>
+                </div>
+              )}
+            </div>
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Species:</span>
-                <span className="text-sm text-gray-900">{batData.species}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-900 font-medium">{predictedSpecies || 'Loading...'}</span>
+                  {predictedSpecies && speciesConfidence > 0 && (
+                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded">
+                      {speciesConfidence.toFixed(1)}%
+                    </span>
+                  )}
+                </div>
               </div>
+              {speciesPredictionError && (
+                <div className="flex items-start gap-2 text-xs text-orange-600 bg-orange-50 p-2 rounded">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span>{speciesPredictionError}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Scientific Name:</span>
-                <span className="text-sm text-gray-900 italic">{batData.species}</span>
+                <span className="text-sm text-gray-900 italic">{predictedSpecies || 'Unknown'}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">BAT ID:</span>
@@ -273,11 +343,28 @@ const BatDetailsPage: React.FC = () => {
           {/* Species Photo Card */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 min-h-64 hover:shadow-lg hover:border-emerald-300 transition-all duration-300 hover:scale-[1.02]">
             <h3 className="text-base font-semibold mb-3 text-emerald-600">Species Photo</h3>
-            <div className="h-48 bg-gray-100 rounded-lg flex flex-col items-center justify-center">
-              <div className="flex flex-col items-center">
+            <div className="h-48 bg-gray-100 rounded-lg flex flex-col items-center justify-center overflow-hidden">
+              {speciesImageUrl ? (
+                <img 
+                  src={speciesImageUrl} 
+                  alt={predictedSpecies || 'Species'} 
+                  className="w-full h-full object-cover rounded-lg"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    const fallback = (e.target as HTMLImageElement).nextElementSibling;
+                    if (fallback) fallback.classList.remove('hidden');
+                  }}
+                />
+              ) : (
+                <div className="flex flex-col items-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mb-2" />
+                  <span className="text-sm text-gray-600">Loading species image...</span>
+                </div>
+              )}
+              <div className="hidden flex-col items-center">
                 <span className="text-4xl mb-1">🦇</span>
-                <p className="text-sm text-center text-gray-600">Pipistrellus pipistrellus</p>
-                <p className="text-xs text-center text-gray-500 mt-1">Common Pipistrelle Bat</p>
+                <p className="text-sm text-center text-gray-600">{predictedSpecies || 'Unknown species'}</p>
+                <p className="text-xs text-center text-gray-500 mt-1">Species photo not available</p>
               </div>
             </div>
           </div>

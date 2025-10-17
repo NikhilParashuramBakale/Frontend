@@ -1,6 +1,12 @@
 // API service for backend communication
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+console.log('🔧 API Configuration:', {
+  API_BASE_URL,
+  VITE_API_URL: import.meta.env.VITE_API_URL,
+  NODE_ENV: import.meta.env.MODE
+});
+
 export interface BatFile {
   id: string;
   name: string;
@@ -129,4 +135,55 @@ export const checkBackendHealth = async (): Promise<boolean> => {
     console.error('Backend health check failed:', error);
     return false;
   }
+};
+
+/**
+ * Predict bat species from spectrogram in Google Drive
+ */
+export interface PredictionResponse {
+  success: boolean;
+  species?: string;
+  confidence?: number;
+  bat_id?: string;
+  folder?: string;
+  message?: string;
+}
+
+export const predictSpecies = async (
+  batId: string,
+  serverNum: string,
+  clientNum: string
+): Promise<PredictionResponse> => {
+  try {
+    // Strip "BAT" prefix if present (e.g., "BAT825" -> "825")
+    const cleanBatId = batId.replace(/^BAT/i, '');
+    
+    const url = `${API_BASE_URL}/predict/${cleanBatId}?server=${serverNum}&client=${clientNum}`;
+    console.log('🔗 Calling predict endpoint:', url);
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data: PredictionResponse = await response.json();
+    console.log('✅ Prediction response:', data);
+    return data;
+  } catch (error) {
+    console.error('Error predicting species:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+};
+
+/**
+ * Get species image URL
+ */
+export const getSpeciesImageUrl = (speciesName: string): string => {
+  const url = `${API_BASE_URL}/species-image/${encodeURIComponent(speciesName)}`;
+  console.log('🖼️ Species image URL:', url);
+  return url;
 };

@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, Play, Volume2, AlertCircle } from 'lucide-react';
 import { NavigationMenu } from './NavigationMenu';
 import { useMenu } from '../context/MenuContext';
-import { fetchBatFiles, getFileUrl, getSpeciesImageUrl } from '../services/api';
+import { fetchBatFiles, getFileUrl, predictSpecies, getSpeciesImageUrl } from '../services/api';
 
 interface EnvironmentalData {
   temperature: number;
@@ -172,51 +172,6 @@ const BatDetailsPage: React.FC = () => {
     loadBatFiles();
   }, []); // Empty dependency array - runs only on mount
 
-  // List of all available bat species (from bat_species folder)
-  const availableBatSpecies = [
-    'Hipposideros_speoris',
-    'Hipposideros_armiger',
-    'Hipposideros_ater',
-    //'Hipposideros_durgadasi',
-    'Hipposideros_fulvus',
-    'Hipposideros_galeritus',
-    'Hipposideros_lankadiva',
-    //'Hipposideros_hyphophyllus',
-    'Pipistrellus_coromandra',
-    'Pipistrellus_ceylonicus',
-    'Pipistrellus_tenuis',
-    'Rhinolophus_rouxii',
-    'Rhinolophus_indorouxii',
-    'Rhinolophus_beddomi',
-    'Rhinolophus_lepidus',
-    'Rhinolophus_perniger',
-    //'Taphozous_melanopogon',
-    //'Taphozous_nudiventris',
-    //'Taphozous_theobaldi',
-    //'Megaderma_lyra',
-    //'Megaderma_spasma',
-    //'Miniopterus_philipsi',
-    //'Miniopterus_phillipsi',
-    //'Miniopterus_srini',
-    //'Murina_Sp',
-    //'Otomops_wroughtoni',
-    //'Lyroderma_lyra',
-    //'Saccolaimus_saccolaimus',
-    //'Scotophilus_heathi',
-    //'Scotophilus_heathii',
-    //'Rhinopoma_hardwicki',
-    //'Rhinopoma_hardwickii',
-    'Tadarida_aegyptiaca',
-    //'Chaerephon_plicatus',
-    //'Hesperotenus_tickelli',
-  ];
-
-  // Get random species
-  const getRandomSpecies = () => {
-    const randomIndex = Math.floor(Math.random() * availableBatSpecies.length);
-    return availableBatSpecies[randomIndex];
-  };
-
   // Predict species from spectrogram after component mounts
   useEffect(() => {
     if (!batId || !serverNum || !clientNum || loading) return;
@@ -227,19 +182,23 @@ const BatDetailsPage: React.FC = () => {
       
       try {
         console.log('🤖 Starting species prediction for BAT', batId);
+        const result = await predictSpecies(batId, serverNum, clientNum);
         
-        // Select a random species from available bat species
-        const randomSpecies = getRandomSpecies();
-        const randomConfidence = Math.round((Math.random() * 20 + 75) * 100) / 100; // Random between 75-95%
-        
-        console.log('✅ Random species selected:', randomSpecies, `(${randomConfidence}%)`);
-        setPredictedSpecies(randomSpecies);
-        setSpeciesConfidence(randomConfidence);
-        
-        // Set species image URL
-        const imageUrl = getSpeciesImageUrl(randomSpecies);
-        setSpeciesImageUrl(imageUrl);
-        console.log('📸 Species image URL set:', imageUrl);
+        if (result.success && result.species) {
+          console.log('✅ Prediction successful:', result.species, `(${result.confidence}%)`);
+          setPredictedSpecies(result.species);
+          setSpeciesConfidence(result.confidence || 0);
+          
+          // Set species image URL
+          const imageUrl = getSpeciesImageUrl(result.species);
+          setSpeciesImageUrl(imageUrl);
+          console.log('📸 Species image URL set:', imageUrl);
+        } else {
+          console.warn('⚠️ Prediction failed:', result.message);
+          setSpeciesPredictionError(result.message || 'Failed to predict species');
+          setPredictedSpecies('Unknown species');
+          setSpeciesImageUrl(getSpeciesImageUrl('Unknown_species'));
+        }
       } catch (err) {
         console.error('❌ Error during prediction:', err);
         setSpeciesPredictionError(err instanceof Error ? err.message : 'Prediction error occurred');

@@ -180,10 +180,12 @@ export const predictSpecies = async (
 };
 
 /**
- * Get species image URL
+ * Get species image URL from local frontend bat_species folder
  */
 export const getSpeciesImageUrl = (speciesName: string): string => {
-  const url = `${API_BASE_URL}/species-image/${encodeURIComponent(speciesName)}`;
-  console.log('🖼️ Species image URL:', url);
+  // Use local frontend bat_species folder instead of backend API
+  // Species names should have underscores (e.g., "Hipposideros_speoris")
+  const url = `/bat_species/${encodeURIComponent(speciesName)}.jpg`;
+  console.log('🖼️ Species image URL (local):', url);
   return url;
 };
